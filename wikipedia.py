@@ -10,9 +10,8 @@ def revisions(title, start, end):
 			action=u"query",
 			prop=u"revisions",
 			titles=title,
-			rvlimit=u"5",
+			rvlimit=u"50",
 			rvprop=u"ids|timestamp",
-			format=u"json",
 			rvstart=start + "T00:00:00Z",
 			rvend=end + "T00:00:00Z",
 			rvdir=u"newer",
@@ -34,7 +33,6 @@ def fetch_first_revision_before(title, end):
 		titles=title,
 		rvlimit=u"1",
 		rvprop=u"ids|timestamp",
-		format=u"json",
 		rvstart=end + "T00:00:00Z",
 		rvdir=u"older",
 	)
@@ -49,7 +47,6 @@ def fetch_content(title, revid):
 		titles=title,
 		rvlimit=u"1",
 		rvprop=u"ids|timestamp|content",
-		format=u"json",
 		rvstartid=unicode(revid),
 		rvendid=unicode(revid),
 	)
@@ -57,11 +54,49 @@ def fetch_content(title, revid):
 	rev, = page['revisions']
 	return rev['*']
 
+def fetch_content_html(title, revid):
+	data = fetch_wikipedia_api(
+		action=u"query",
+		prop=u"revisions",
+		titles=title,
+		rvlimit=u"1",
+		rvprop=u"ids|timestamp|content",
+		rvstartid=unicode(revid),
+		rvendid=unicode(revid),
+		rvparse="true",
+	)
+	page, = data['query']['pages'].values()
+	rev, = page['revisions']
+	return rev['*']
 
+
+
+def fetch_category_members(catname):
+	cont = {}
+	members = []
+	while True:
+		data = fetch_wikipedia_api(
+			action=u"query",
+			list=u"categorymembers",
+			cmtitle=catname,
+			cmlimit=u"50",
+			**cont)
+		members += data['query']['categorymembers']
+		if u'query-continue' in data:
+			cont = {"cmcontinue" : str(data[u'query-continue'][u'categorymembers'][u'cmcontinue'])}
+		else:
+			break
+	return members
+
+def fetch_sitting_mps():
+	return [
+		cm["title"]
+		for cm in fetch_category_members(u'Category:UK MPs 2010\u201315')
+		if cm["ns"] == 0 ]
 
 def longest_contiguous(revisions):
 	durations_and_data = []
-	for oldrev, newrev in zip(revisions[:-2], revisions[1:]):
+	for oldrev, newrev in zip(revisions[:-1], revisions[1:]):
 		olddt = datetime.datetime.strptime(oldrev['timestamp'], "%Y-%m-%dT%H:%M:%SZ")
 		newdt = datetime.datetime.strptime(newrev['timestamp'], "%Y-%m-%dT%H:%M:%SZ")
 		durations_and_data.append((newdt - olddt, oldrev))

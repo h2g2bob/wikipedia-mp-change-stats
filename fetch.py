@@ -24,12 +24,12 @@ def fetch(url):
 		return data
 
 def fetch_nocache(url):
-	logging.debug("fetch_nocache(%r)", url)
+	logging.info("fetch_nocache(%r)", url)
 	return urllib.urlopen(url).read()
 
 def fetch_json(url):
 	return json.loads(fetch(url))
 
 def fetch_wikipedia_api(**kw):
-	return fetch_json("https://en.wikipedia.org/w/api.php?" + encode(**kw))
+	return fetch_json("https://en.wikipedia.org/w/api.php?" + encode(format="json", **kw))
 

@@ -1,44 +1,12 @@
 import logging
-import json
-import urllib
-import json
-import os.path
-import hashlib
 import datetime
-import re
-from collections import defaultdict
-
-def encode(**kw):
-	return "&".join(
-		"%s=%s" % (k, urllib.quote(v.encode("utf8")))
-		for (k, v) in kw.items())
-
-def fetch(url):
-	fname = os.path.join("www-cache", hashlib.sha1(url).hexdigest())
-	logging.debug("fetch(%r) -> %r", url, fname)
-	try:
-		with open(fname, "r") as f:
-			return f.read()
-	except IOError:
-		data = fetch_nocache(url)
-		with open(fname, "w") as f: # NOT threadsafe
-			f.write(data)
-		with open(fname + ".url", "w") as f:
-			f.write(url)
-		return data
-
-def fetch_nocache(url):
-	logging.debug("fetch_nocache(%r)", url)
-	return urllib.urlopen(url).read()
-
-def fetch_json(url):
-	return json.loads(fetch(url))
+from fetch import fetch_wikipedia_api
 
 def revisions(title, start, end):
 	revisions = []
 	cont = {}
 	while True:
-		data = fetch_json("https://en.wikipedia.org/w/api.php?" + encode(
+		data = fetch_wikipedia_api(
 			action=u"query",
 			prop=u"revisions",
 			titles=title,
@@ -49,7 +17,7 @@ def revisions(title, start, end):
 			rvend=end + "T00:00:00Z",
 			rvdir=u"newer",
 			**cont
-		))
+		)
 		page, = data['query']['pages'].values()
 		revisions += page.get('revisions', [])
 
@@ -60,7 +28,7 @@ def revisions(title, start, end):
 	return revisions
 
 def fetch_first_revision_before(title, end):
-	data = fetch_json("https://en.wikipedia.org/w/api.php?" + encode(
+	data = fetch_wikipedia_api(
 		action=u"query",
 		prop=u"revisions",
 		titles=title,
@@ -69,13 +37,13 @@ def fetch_first_revision_before(title, end):
 		format=u"json",
 		rvstart=end + "T00:00:00Z",
 		rvdir=u"older",
-	))
+	)
 	page, = data['query']['pages'].values()
 	rev, = page['revisions']
 	return rev
 
 def fetch_content(title, revid):
-	data = fetch_json("https://en.wikipedia.org/w/api.php?" + encode(
+	data = fetch_wikipedia_api(
 		action=u"query",
 		prop=u"revisions",
 		titles=title,
@@ -84,7 +52,7 @@ def fetch_content(title, revid):
 		format=u"json",
 		rvstartid=unicode(revid),
 		rvendid=unicode(revid),
-	))
+	)
 	page, = data['query']['pages'].values()
 	rev, = page['revisions']
 	return rev['*']
@@ -109,33 +77,4 @@ def fetch_longest_contiguous(title, start, end):
 		return revs[0]
 	else:
 		return longest_contiguous(revs)
-
-def word_count(text):
-	words = defaultdict(int)
-	for word in re.findall(ur"\b(\w+)\b", text, flags=re.U):
-		words[word] += 1
-	return dict(words)
-
-def wc_diff(a, b):
-	diffs = {}
-	for k in set(a.keys()) | set(b.keys()):
-		n = a.get(k,0) - b.get(k,0)
-		if n != 0:
-			diffs[k] = n
-	return diffs
-
-def difference_in_content(title):
-	recent_rev = fetch_longest_contiguous(title, "2015-02-01", "2015-03-01")
-	recent_wikitext = fetch_content(title, recent_rev['revid'])
-	recent_wc = word_count(recent_wikitext)
-
-	old_rev = fetch_longest_contiguous(title, "2014-08-01", "2014-09-01")
-	old_wikitext = fetch_content(title, old_rev['revid'])
-	old_wc = word_count(old_wikitext)
-
-	return wc_diff(old_wc, recent_wc)
-
-if __name__=='__main__':
-	logging.root.setLevel(logging.DEBUG)
-	print difference_in_content(u"David Amess")
 
